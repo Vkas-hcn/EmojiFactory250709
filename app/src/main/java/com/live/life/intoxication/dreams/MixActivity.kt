@@ -3,17 +3,27 @@ package com.live.life.intoxication.dreams
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageView
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.live.life.intoxication.dreams.databinding.ActivityMixBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class MixActivity : AppCompatActivity() {
@@ -22,7 +32,8 @@ class MixActivity : AppCompatActivity() {
     private var currentSelectedTab = -1
     private val checkImageViews = mutableListOf<android.widget.ImageView>()
 
-    private lateinit var emojiAdapter: EnhancedEmojiAdapter
+    private lateinit var emojiAdapter: OptimizedEmojiAdapter
+    private val preloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // 存储当前选中的图片数据，用于合成
     private var result1ItemData: EmojiItemData? = null
@@ -48,10 +59,21 @@ class MixActivity : AppCompatActivity() {
         initViews()
         setupRecyclerView()
         setupClickListeners()
+        startPreloadingCompositeImages()
 
-        // 默认选中第一个选项卡
         selectTab(0)
     }
+    private fun startPreloadingCompositeImages() {
+        preloadScope.launch {
+            try {
+                val compositeDataList = CompositeImageDataGenerator.generateCompositeImageList()
+                BitmapComposer.preloadCompositeImages(this@MixActivity, compositeDataList)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 
     private fun initViews() {
         checkImageViews.addAll(listOf(
@@ -64,10 +86,8 @@ class MixActivity : AppCompatActivity() {
         ))
     }
 
-// 在MixActivity.kt中的setupRecyclerView()方法需要这样优化：
-
     private fun setupRecyclerView() {
-        emojiAdapter = EnhancedEmojiAdapter { itemData, position ->
+        emojiAdapter = OptimizedEmojiAdapter { itemData, position ->
             onImageItemClick(itemData, position)
         }
 
@@ -75,30 +95,61 @@ class MixActivity : AppCompatActivity() {
             layoutManager = GridLayoutManager(this@MixActivity, 4)
             adapter = emojiAdapter
 
-            // 性能优化设置
-            setHasFixedSize(true)  // 保持原有
-            setItemViewCacheSize(20)  // 保持原有
+            setHasFixedSize(true)
+            setItemViewCacheSize(32)
 
-            // 新增优化设置
-            recycledViewPool.setMaxRecycledViews(EnhancedEmojiAdapter.TYPE_SINGLE, 10)
-            recycledViewPool.setMaxRecycledViews(EnhancedEmojiAdapter.TYPE_COMPOSITE, 10)
+            recycledViewPool.setMaxRecycledViews(OptimizedEmojiAdapter.TYPE_SINGLE, 16)
+            recycledViewPool.setMaxRecycledViews(OptimizedEmojiAdapter.TYPE_COMPOSITE, 16)
 
-            // 预取优化
             layoutManager?.isItemPrefetchEnabled = true
 
-            // 禁用嵌套滑动（如果不需要的话）
             isNestedScrollingEnabled = false
 
-            // 禁用动画（可选，如果不需要item动画的话）
-            // itemAnimator = null
+            itemAnimator = null
+
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    super.onScrollStateChanged(recyclerView, newState)
+
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        preloadVisibleItems()
+                    }
+                }
+            })
+        }
+    }
+    private fun preloadVisibleItems() {
+        val layoutManager = binding.rvEmo.layoutManager as? GridLayoutManager ?: return
+        val firstVisible = layoutManager.findFirstVisibleItemPosition()
+        val lastVisible = layoutManager.findLastVisibleItemPosition()
+
+        if (firstVisible == RecyclerView.NO_POSITION || lastVisible == RecyclerView.NO_POSITION) {
+            return
+        }
+
+        preloadScope.launch {
+            try {
+                val currentList = getCurrentItemList()
+                val preloadRange = (firstVisible..lastVisible.coerceAtMost(currentList.size - 1))
+
+                for (position in preloadRange) {
+                    val item = currentList.getOrNull(position)
+                    if (item is EmojiItemData.CompositeImage) {
+                        val cacheKey = OptimizedBitmapCache.generateKey(item.data)
+                        if (OptimizedBitmapCache.getBitmap(cacheKey) == null) {
+                            OptimizedBitmapCache.preloadBitmap(this@MixActivity, item.data, 48)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
-    // updateListData()方法保持不变，DiffUtil会自动处理差异更新
     private fun updateListData() {
         val itemList = when (currentSelectedTab) {
             0 -> {
-                // Face类别使用复合图像
                 CompositeImageDataGenerator.generateCompositeImageList()
                     .map { EmojiItemData.CompositeImage(it) }
             }
@@ -111,8 +162,12 @@ class MixActivity : AppCompatActivity() {
         }
 
         emojiAdapter.updateData(itemList)
-        // 滑动到顶部（如果需要的话）
         binding.rvEmo.scrollToPosition(0)
+
+        preloadScope.launch {
+            delay(100)
+            preloadVisibleItems()
+        }
     }
 
     private fun setupClickListeners() {
@@ -124,7 +179,6 @@ class MixActivity : AppCompatActivity() {
         binding.llEmoGlasses.setOnClickListener { selectTab(4) }
         binding.llEmoHands.setOnClickListener { selectTab(5) }
 
-        // 添加清除按钮点击事件
         binding.flRef.setOnClickListener {
             clearResult1()
         }
@@ -149,84 +203,63 @@ class MixActivity : AppCompatActivity() {
 
 
     private fun onImageItemClick(itemData: EmojiItemData, position: Int) {
-        // 优先显示在img_result_1，只有img_result_1有图片后才能显示到img_result_2
         if (result1ItemData == null) {
-            // 如果img_result_1没有图片，优先显示在img_result_1
             setResultImage(binding.imgResult1, itemData)
             binding.imgResult1.visibility = View.VISIBLE
             binding.tv1.visibility = View.GONE  // 隐藏tv_1
             result1ItemData = itemData
         } else if (result2ItemData == null) {
-            // 如果img_result_1已有图片，且img_result_2没有图片，显示在img_result_2
             setResultImage(binding.imgResult2, itemData)
             binding.imgResult2.visibility = View.VISIBLE
-            binding.tv2.visibility = View.GONE  // 隐藏tv_2
+            binding.tv2.visibility = View.GONE
             result2ItemData = itemData
 
-            // 自动合成并跳转
             mergeImagesAndNavigate()
         }
-        // 如果两个位置都有图片，不做任何操作（或者可以替换第二个）
     }
 
 
 
     private fun clearResult1() {
-        // 清除img_result_1的图片并显示tv_1
         binding.imgResult1.visibility = View.GONE
         binding.tv1.visibility = View.VISIBLE
         result1ItemData = null
 
-        // 如果result2有图片，将其移动到result1
         if (result2ItemData != null) {
             result1ItemData = result2ItemData
             result2ItemData = null
 
-            // 将result2的图片显示到result1
             setResultImage(binding.imgResult1, result1ItemData!!)
             binding.imgResult1.visibility = View.VISIBLE
             binding.tv1.visibility = View.GONE
 
-            // 清除result2
             binding.imgResult2.visibility = View.GONE
             binding.tv2.visibility = View.VISIBLE
         }
     }
 
     private fun mergeImagesAndNavigate() {
-        // 确保两个图片都已选择
         if (result1ItemData == null || result2ItemData == null) {
             return
         }
 
         try {
-            // 创建合成图片
             val mergedBitmap = createMergedBitmap()
 
             if (mergedBitmap != null) {
-                // 将合成的图片保存到静态变量或通过Intent传递
-                // 这里我使用Application类或静态变量的方式
                 MergedImageHolder.mergedBitmap = mergedBitmap
 
-                // 跳转到ResultActivity
                 val intent = Intent(this, ResultActivity::class.java)
                 startActivity(intent)
 
-                // 可选：重置当前状态
                 resetAfterMerge()
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // 处理错误，可以显示Toast等
         }
     }
 
-    /**
-     * 创建合成图片的主要方法
-     * 支持两种合成模式：
-     * 1. Face + Face = 随机重新组合脸部元素
-     * 2. Face + Other = 简单叠加
-     */
+
     private fun createMergedBitmap(): Bitmap? {
         try {
             val targetSize = 96
@@ -234,14 +267,11 @@ class MixActivity : AppCompatActivity() {
             val item1 = result1ItemData!!
             val item2 = result2ItemData!!
 
-            // 判断合成类型
             val isBothFace = item1 is EmojiItemData.CompositeImage && item2 is EmojiItemData.CompositeImage
 
             return if (isBothFace) {
-                // Face + Face：随机重新组合脸部元素
                 createRandomFaceMix(item1 as EmojiItemData.CompositeImage, item2 as EmojiItemData.CompositeImage, targetSize)
             } else {
-                // Face + Other 或 Other + Other：简单叠加
                 createSimpleOverlay(item1, item2, targetSize)
             }
 
@@ -251,10 +281,7 @@ class MixActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 创建随机脸部混合（Face + Face）
-     * 从两个复合图像中随机选择脸、眼睛、嘴巴的组合
-     */
+
     private fun createRandomFaceMix(
         compositeData1: EmojiItemData.CompositeImage,
         compositeData2: EmojiItemData.CompositeImage,
@@ -264,17 +291,14 @@ class MixActivity : AppCompatActivity() {
             val resultBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(resultBitmap)
 
-            // 从两个复合数据中收集所有可用的元素
             val availableFaces = listOf(compositeData1.data.faceResId, compositeData2.data.faceResId)
             val availableEyes = listOf(compositeData1.data.eyeResId, compositeData2.data.eyeResId)
             val availableMouths = listOf(compositeData1.data.mouthResId, compositeData2.data.mouthResId)
 
-            // 也可以从全局资源池中随机选择，增加更多变化
             val allFaces = ImageViewData.imageFace
             val allEyes = ImageViewData.imageEye
             val allMouths = ImageViewData.imageMouth
 
-            // 随机选择元素（50%概率从当前两个选择，50%概率从全局随机选择）
             val selectedFace = if (Random.nextBoolean()) {
                 availableFaces.random()
             } else {
@@ -293,10 +317,8 @@ class MixActivity : AppCompatActivity() {
                 allMouths.random()
             }
 
-            // 创建新的复合数据并合成
             val newCompositeData = CompositeImageData(selectedFace, selectedEyes, selectedMouth)
 
-            // 使用BitmapComposer创建最终图像
             return BitmapComposer.createCompositeBitmap(this, newCompositeData, targetSize)
 
         } catch (e: Exception) {
@@ -305,10 +327,8 @@ class MixActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 创建简单叠加合成（Face + Other 或 Other + Other）
-     * 修复版本：不会过早回收bitmap
-     */
+
+
     private fun createSimpleOverlay(
         itemData1: EmojiItemData,
         itemData2: EmojiItemData,
@@ -318,31 +338,43 @@ class MixActivity : AppCompatActivity() {
             val resultBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(resultBitmap)
 
-            // 获取第一个图片的Bitmap
             val bitmap1 = getBitmapFromItemData(itemData1, targetSize)
-            // 获取第二个图片的Bitmap
             val bitmap2 = getBitmapFromItemData(itemData2, targetSize)
 
-            // 绘制第一个图片
             bitmap1?.let {
                 if (!it.isRecycled) {
-                    canvas.drawBitmap(it, 0f, 0f, null)
+                    val scaledBitmap1 = if (it.width != targetSize || it.height != targetSize) {
+                        Bitmap.createScaledBitmap(it, targetSize, targetSize, true)
+                    } else {
+                        it
+                    }
+                    canvas.drawBitmap(scaledBitmap1, 0f, 0f, null)
+
+                    if (scaledBitmap1 != it && !scaledBitmap1.isRecycled) {
+                        scaledBitmap1.recycle()
+                    }
                 }
             }
 
-            // 绘制第二个图片（叠加效果）
             bitmap2?.let {
                 if (!it.isRecycled) {
-                    val paint = android.graphics.Paint().apply {
-                        alpha = 180 // 设置透明度，可以调整
+                    val scaledBitmap2 = if (it.width != targetSize || it.height != targetSize) {
+                        Bitmap.createScaledBitmap(it, targetSize, targetSize, true)
+                    } else {
+                        it
                     }
-                    canvas.drawBitmap(it, 0f, 0f, paint)
+
+                    val paint = android.graphics.Paint().apply {
+                        alpha = 180
+                        isAntiAlias = true
+                    }
+                    canvas.drawBitmap(scaledBitmap2, 0f, 0f, paint)
+
+                    if (scaledBitmap2 != it && !scaledBitmap2.isRecycled) {
+                        scaledBitmap2.recycle()
+                    }
                 }
             }
-
-            // 重要：不要在这里回收bitmap1和bitmap2
-            // 因为它们可能还在其他地方被使用（如ImageView中）
-            // 让GC自动处理内存回收
 
             return resultBitmap
         } catch (e: Exception) {
@@ -351,19 +383,38 @@ class MixActivity : AppCompatActivity() {
         }
     }
 
+
     private fun getBitmapFromItemData(itemData: EmojiItemData, targetSize: Int): Bitmap? {
         return when (itemData) {
             is EmojiItemData.SingleImage -> {
-                // 从资源创建Bitmap
-                val drawable = ContextCompat.getDrawable(this, itemData.imageResId)
-                drawable?.let { drawableToBitmap(it, targetSize) }
+                getBitmapFromResource(itemData.imageResId, targetSize)
             }
             is EmojiItemData.CompositeImage -> {
-                // 使用BitmapComposer创建复合图片
                 BitmapComposer.createCompositeBitmap(this, itemData.data, targetSize)
             }
         }
     }
+
+
+    private fun getBitmapFromResource(resId: Int, targetSize: Int): Bitmap? {
+        return try {
+            val drawable = ContextCompat.getDrawable(this, resId)
+            if (drawable is BitmapDrawable) {
+                val originalBitmap = drawable.bitmap
+                Bitmap.createScaledBitmap(originalBitmap, targetSize, targetSize, true)
+            } else {
+                val bitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                drawable?.setBounds(0, 0, targetSize, targetSize)  // 设置边界为整个画布
+                drawable?.draw(canvas)
+                bitmap
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
 
     private fun drawableToBitmap(drawable: Drawable, targetSize: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
@@ -373,34 +424,43 @@ class MixActivity : AppCompatActivity() {
         return bitmap
     }
 
-    /**
-     * 优化的setResultImage方法，避免bitmap回收问题
-     */
+
     private fun setResultImage(imageView: android.widget.ImageView, itemData: EmojiItemData) {
         when (itemData) {
             is EmojiItemData.SingleImage -> {
-                // 直接使用资源ID，避免bitmap回收问题
                 imageView.setImageResource(itemData.imageResId)
+                imageView.scaleType = ImageView.ScaleType.FIT_XY
             }
             is EmojiItemData.CompositeImage -> {
-                // 显示完整的复合图像
-                val compositeBitmap = BitmapComposer.createCompositeBitmap(
-                    this,
-                    itemData.data,
-                    targetSize = 56 // 根据你的ImageView大小调整
-                )
-                if (compositeBitmap != null && !compositeBitmap.isRecycled) {
-                    imageView.setImageBitmap(compositeBitmap)
+                val cacheKey = OptimizedBitmapCache.generateKey(itemData.data)
+                val cachedBitmap = OptimizedBitmapCache.getBitmap(cacheKey)
+
+                if (cachedBitmap != null) {
+                    imageView.setImageBitmap(cachedBitmap)
+                    imageView.scaleType = ImageView.ScaleType.FIT_XY
                 } else {
-                    // 如果合成失败，显示face部分
                     imageView.setImageResource(itemData.data.faceResId)
+                    imageView.scaleType = ImageView.ScaleType.FIT_XY
+
+                    lifecycleScope.launch {
+                        try {
+                            val bitmap = BitmapComposer.createCompositeBitmapAsync(
+                                this@MixActivity,
+                                itemData.data,
+                                56
+                            )
+                            bitmap?.let {
+                                imageView.setImageBitmap(it)
+                                imageView.scaleType = ImageView.ScaleType.FIT_XY
+                            }
+                        } catch (e: Exception) {
+                        }
+                    }
                 }
             }
         }
     }
-
     private fun resetAfterMerge() {
-        // 可选：重置所有状态
         result1ItemData = null
         result2ItemData = null
         binding.imgResult1.visibility = View.GONE
@@ -409,10 +469,7 @@ class MixActivity : AppCompatActivity() {
         binding.tv2.visibility = View.VISIBLE
     }
 
-    // 获取当前选中的选项卡
-    fun getCurrentSelectedTab(): Int = currentSelectedTab
 
-    // 获取当前显示的数据列表
     fun getCurrentItemList(): List<EmojiItemData> {
         return when (currentSelectedTab) {
             0 -> CompositeImageDataGenerator.generateCompositeImageList()
@@ -426,18 +483,16 @@ class MixActivity : AppCompatActivity() {
         }
     }
 
-    // 重置状态
-    fun resetState() {
-        binding.imgResult1.visibility = View.GONE
-        binding.imgResult2.visibility = View.GONE
-        binding.tv1.visibility = View.VISIBLE
-        binding.tv2.visibility = View.VISIBLE
-        result1ItemData = null
-        result2ItemData = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        emojiAdapter.cleanup()
+        preloadScope.cancel()
+
     }
 }
 
-// 用于在Activity之间传递合成图片的辅助类
 object MergedImageHolder {
     var mergedBitmap: Bitmap? = null
 }

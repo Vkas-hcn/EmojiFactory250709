@@ -68,7 +68,6 @@ object ImageUtils {
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
         outputStream.close()
 
-        // 通知媒体库更新
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DATA, imageFile.absolutePath)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
@@ -78,11 +77,9 @@ object ImageUtils {
 
     suspend fun shareImage(context: Context, drawableRes: Int) {
         withContext(Dispatchers.IO) {
-            //drawableRes转bitmap
             val bitmap = ContextCompat.getDrawable(context, drawableRes)?.toBitmap()
             bitmap?.let { bitmap ->
                     try {
-                        // 创建临时文件
                         val fileName = "ems_${System.currentTimeMillis()}.png"
                         val cacheDir = File(context.cacheDir, "shared_images")
                         if (!cacheDir.exists()) {
@@ -96,14 +93,12 @@ object ImageUtils {
                         fos.flush()
                         fos.close()
 
-                        // 获取文件URI
                         val uri = FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.fileprovider",
                             file
                         )
 
-                        // 创建分享Intent
                         val shareIntent = Intent().apply {
                             action = Intent.ACTION_SEND
                             type = "image/png"

@@ -53,7 +53,6 @@ class DownDetailActivity : AppCompatActivity() {
             else -> emptyList()
         }
 
-        // 设置标题
         binding.textView4.text = when (imageType) {
             MainActivity.TYPE_FRUITS -> "Fruits"
             MainActivity.TYPE_SMILE -> "Smile"
@@ -72,18 +71,14 @@ class DownDetailActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        // 返回按钮
         binding.imgBack.setOnClickListener {
             finish()
         }
 
-        // 批量下载按钮
         binding.imgDown.setOnClickListener {
-            // Android 10+ 不需要权限检查，直接下载
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 batchDownloadImages()
             } else {
-                // Android 9 及以下需要权限
                 if (PermissionManager.hasStoragePermission(this)) {
                     batchDownloadImages()
                 } else {
@@ -92,25 +87,20 @@ class DownDetailActivity : AppCompatActivity() {
             }
         }
 
-        // 对话框关闭按钮
         binding.imgClosure.setOnClickListener {
             hideImageDialog()
         }
 
-        // 分享按钮
         binding.iconShare.setOnClickListener {
             lifecycleScope.launch {
                 ImageUtils.shareImage(this@DownDetailActivity, currentImageRes)
             }
         }
 
-        // 下载单张图片按钮
         binding.iconDownload.setOnClickListener {
-            // Android 10+ 不需要权限检查，直接下载
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 downloadSingleImage()
             } else {
-                // Android 9 及以下需要权限
                 if (PermissionManager.hasStoragePermission(this)) {
                     downloadSingleImage()
                 } else {
@@ -119,14 +109,11 @@ class DownDetailActivity : AppCompatActivity() {
             }
         }
 
-        // 点击对话框背景关闭
         binding.conDialog.setOnClickListener {
             hideImageDialog()
         }
 
-        // 防止点击内容区域关闭对话框
         binding.linearLayout.setOnClickListener {
-            // 不做任何操作
         }
     }
 
@@ -174,15 +161,11 @@ class DownDetailActivity : AppCompatActivity() {
             PermissionManager.STORAGE_PERMISSION_CODE -> {
                 if (grantResults.isNotEmpty() &&
                     grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                    // 权限被授予，可以执行下载操作
                     Toast.makeText(this, "The permission has been obtained, you can download the picture", Toast.LENGTH_SHORT).show()
                 } else {
-                    // 权限被拒绝
                     if (PermissionManager.shouldShowRequestPermissionRationale(this)) {
-                        // 用户选择了"不再询问"
                         PermissionManager.showPermissionDeniedDialog(this)
                     } else {
-                        // 用户拒绝了权限
                         Toast.makeText(this, "Need to save pictures", Toast.LENGTH_SHORT).show()
                     }
                 }

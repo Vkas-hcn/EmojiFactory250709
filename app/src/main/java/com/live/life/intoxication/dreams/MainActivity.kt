@@ -21,6 +21,8 @@ class MainActivity : AppCompatActivity() {
         const val TYPE_FRUITS = "fruits"
         const val TYPE_SMILE = "smile"
         const val TYPE_ALIEN = "alien"
+        private const val MAIN_PAGE_DISPLAY_COUNT = 5
+
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         this.supportActionBar?.hide()
 
         onBackPressedDispatcher.addCallback {
-            // 可以在这里添加退出确认逻辑
+            finish()
         }
 
         setupRecyclerViews()
@@ -44,26 +46,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerViews() {
-        // 设置水果图片列表
         binding.rvFruit.apply {
-            layoutManager = GridLayoutManager(this@MainActivity, 6)
-            adapter = GridImageAdapter(ImageViewData.downloadImageFruits) { position, imageRes ->
+            layoutManager = GridLayoutManager(this@MainActivity, 5)
+            adapter = GridImageAdapter(ImageViewData.downloadImageFruits.take(MAIN_PAGE_DISPLAY_COUNT)) { position, imageRes ->
                 navigateToDetail(TYPE_FRUITS)
             }
         }
 
-        // 设置笑脸图片列表
         binding.rvSmile.apply {
-            layoutManager = GridLayoutManager(this@MainActivity, 6)
-            adapter = GridImageAdapter(ImageViewData.downloadImageSmile) { position, imageRes ->
+            layoutManager = GridLayoutManager(this@MainActivity, 5)
+            adapter = GridImageAdapter(ImageViewData.downloadImageSmile.take(MAIN_PAGE_DISPLAY_COUNT)) { position, imageRes ->
                 navigateToDetail(TYPE_SMILE)
             }
         }
 
-        // 设置外星人图片列表
         binding.rvAlien.apply {
-            layoutManager = GridLayoutManager(this@MainActivity, 6)
-            adapter = GridImageAdapter(ImageViewData.downloadImageAlien) { position, imageRes ->
+            layoutManager = GridLayoutManager(this@MainActivity, 5)
+            adapter = GridImageAdapter(ImageViewData.downloadImageAlien.take(MAIN_PAGE_DISPLAY_COUNT)) { position, imageRes ->
                 navigateToDetail(TYPE_ALIEN)
             }
         }
@@ -71,15 +70,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         binding.imgMix.setOnClickListener {
-            lifecycleScope.launch {
-                startActivity(Intent(this@MainActivity, MixActivity::class.java))
-            }
+            startActivity(Intent(this@MainActivity, MixActivity::class.java))
         }
 
         binding.imgSetting.setOnClickListener {
             lifecycleScope.launch {
                 startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
             }
+        }
+        binding.mcvFruit.setOnClickListener {
+            navigateToDetail(TYPE_FRUITS)
+        }
+        binding.mcvSmile.setOnClickListener {
+            navigateToDetail(TYPE_SMILE)
+        }
+        binding.mcvAlien.setOnClickListener {
+            navigateToDetail(TYPE_ALIEN)
         }
     }
 

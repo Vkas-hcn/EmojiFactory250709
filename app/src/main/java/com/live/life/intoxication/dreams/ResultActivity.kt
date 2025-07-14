@@ -38,11 +38,9 @@ class ResultActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            // 权限被授予，执行下载
             performDownload()
         } else {
-            // 权限被拒绝
-            Toast.makeText(this, "需要存储权限才能保存图片", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Storage permissions are required to save pictures", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -61,7 +59,6 @@ class ResultActivity : AppCompatActivity() {
         this.supportActionBar?.hide()
 
         onBackPressedDispatcher.addCallback {
-            // 返回时清理资源
             finish()
         }
 
@@ -71,7 +68,6 @@ class ResultActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        // 设置返回按钮点击事件
         binding.imgBack.setOnClickListener {
             finish()
         }
@@ -79,12 +75,10 @@ class ResultActivity : AppCompatActivity() {
 
 
     private fun setupClickListeners() {
-        // 分享按钮点击事件
         binding.iconShare.setOnClickListener {
             shareImage(this)
         }
 
-        // 下载按钮点击事件
         binding.iconDownload.setOnClickListener {
             downloadImage()
         }
@@ -94,7 +88,6 @@ class ResultActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             currentMergedBitmap?.let { bitmap ->
                 try {
-                    // 创建临时文件
                     val fileName = "ems_${System.currentTimeMillis()}.png"
                     val cacheDir = File(context.cacheDir, "shared_images")
                     if (!cacheDir.exists()) {
@@ -108,14 +101,12 @@ class ResultActivity : AppCompatActivity() {
                     fos.flush()
                     fos.close()
 
-                    // 获取文件URI
                     val uri = FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",
                         file
                     )
 
-                    // 创建分享Intent
                     val shareIntent = Intent().apply {
                         action = Intent.ACTION_SEND
                         type = "image/png"
@@ -145,10 +136,8 @@ class ResultActivity : AppCompatActivity() {
     private fun downloadImage() {
         // 检查权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10 及以上版本不需要存储权限（使用MediaStore）
             performDownloadWithMediaStore()
         } else {
-            // Android 9 及以下版本需要存储权限
             if (ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -156,14 +145,12 @@ class ResultActivity : AppCompatActivity() {
             ) {
                 performDownload()
             } else {
-                // 请求权限
                 storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
     }
 
     private fun performDownloadWithMediaStore() {
-        // Android 10+ 使用 MediaStore API
         currentMergedBitmap?.let { bitmap ->
             try {
                 val resolver = contentResolver
@@ -203,25 +190,21 @@ class ResultActivity : AppCompatActivity() {
     private fun performDownload() {
         currentMergedBitmap?.let { bitmap ->
             try {
-                // 创建下载目录
                 val downloadsDir =
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 if (!downloadsDir.exists()) {
                     downloadsDir.mkdirs()
                 }
 
-                // 创建文件
                 val fileName = "merged_emoji_${System.currentTimeMillis()}.png"
                 val file = File(downloadsDir, fileName)
 
-                // 保存bitmap到文件
                 val fileOutputStream = FileOutputStream(file)
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream)
                 fileOutputStream.close()
 
                 Toast.makeText(this, "The image has been saved to the download folder: $fileName", Toast.LENGTH_LONG).show()
 
-                // 通知媒体扫描器更新
                 val mediaScanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
                 mediaScanIntent.data = Uri.fromFile(file)
                 sendBroadcast(mediaScanIntent)
@@ -241,7 +224,6 @@ class ResultActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // 更安全的bitmap回收处理
         currentMergedBitmap?.let { bitmap ->
             if (!bitmap.isRecycled) {
                 bitmap.recycle()
@@ -249,7 +231,6 @@ class ResultActivity : AppCompatActivity() {
         }
         currentMergedBitmap = null
 
-        // 清理MergedImageHolder中的bitmap
         MergedImageHolder.mergedBitmap?.let { bitmap ->
             if (!bitmap.isRecycled) {
                 bitmap.recycle()
@@ -258,24 +239,19 @@ class ResultActivity : AppCompatActivity() {
         MergedImageHolder.mergedBitmap = null
     }
 
-    /**
-     * 优化的loadMergedImage方法
-     */
+
     private fun loadMergedImage() {
-        // 从MergedImageHolder获取合成的图片
         MergedImageHolder.mergedBitmap?.let { bitmap ->
             if (!bitmap.isRecycled) {
                 currentMergedBitmap = bitmap
                 binding.imgResult.setImageBitmap(bitmap)
             } else {
-                // 如果bitmap已经被回收，显示默认图片
                 binding.imgResult.setImageResource(R.drawable.face1)
-                Toast.makeText(this, "合成图片已失效", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Synthetic image has expired", Toast.LENGTH_SHORT).show()
             }
         } ?: run {
-            // 如果没有合成图片，显示默认图片
             binding.imgResult.setImageResource(R.drawable.face1)
-            Toast.makeText(this, "未找到合成图片", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No synthetic image found", Toast.LENGTH_SHORT).show()
         }
     }
 }
