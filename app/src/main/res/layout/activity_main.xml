@@ -117,7 +117,7 @@
 
 
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/mcv_smile"
+                android:id="@+id/mcv_emoji"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="20dp"
@@ -143,7 +143,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Smile"
+                        android:text="Emoji"
                         android:textColor="#FF333333"
                         android:textSize="14sp"
                         android:textStyle="bold" />
@@ -168,7 +168,7 @@
                     app:layout_constraintTop_toBottomOf="@+id/img_e">
 
                     <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rv_smile"
+                        android:id="@+id/rv_emoji"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:paddingHorizontal="24dp"

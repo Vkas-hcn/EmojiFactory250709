@@ -860,7 +860,7 @@ object ImageViewData {
         R.drawable.alien_15,
     )
 
-    val downloadImageSmile = arrayListOf(
+    val downloadImageEmoji = arrayListOf(
         R.drawable.smile_1,
         R.drawable.smile_2,
         R.drawable.smile_3,
@@ -876,6 +876,17 @@ object ImageViewData {
         R.drawable.smile_13,
         R.drawable.smile_14,
         R.drawable.smile_15,
+        R.drawable.icon_emjio1,
+        R.drawable.icon_emjio2,
+        R.drawable.icon_emjio3,
+        R.drawable.icon_emjio4,
+        R.drawable.icon_emjio5,
+        R.drawable.icon_emjio6,
+        R.drawable.icon_emjio7,
+        R.drawable.icon_emjio8,
+        R.drawable.icon_emjio9,
+        R.drawable.icon_emjio10,
+        R.drawable.icon_emjio11,
     )
 
 }

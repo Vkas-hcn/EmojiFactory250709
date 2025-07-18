@@ -48,14 +48,14 @@ class DownDetailActivity : AppCompatActivity() {
 
         currentImageList = when (imageType) {
             MainActivity.TYPE_FRUITS -> ImageViewData.downloadImageFruits
-            MainActivity.TYPE_SMILE -> ImageViewData.downloadImageSmile
+            MainActivity.TYPE_SMILE -> ImageViewData.downloadImageEmoji
             MainActivity.TYPE_ALIEN -> ImageViewData.downloadImageAlien
             else -> emptyList()
         }
 
         binding.textView4.text = when (imageType) {
             MainActivity.TYPE_FRUITS -> "Fruits"
-            MainActivity.TYPE_SMILE -> "Smile"
+            MainActivity.TYPE_SMILE -> "Emoji"
             MainActivity.TYPE_ALIEN -> "Alien"
             else -> "Images"
         }

@@ -53,9 +53,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.rvSmile.apply {
+        binding.rvEmoji.apply {
             layoutManager = GridLayoutManager(this@MainActivity, 5)
-            adapter = GridImageAdapter(ImageViewData.downloadImageSmile.take(MAIN_PAGE_DISPLAY_COUNT)) { position, imageRes ->
+            adapter = GridImageAdapter(ImageViewData.downloadImageEmoji.take(MAIN_PAGE_DISPLAY_COUNT)) { position, imageRes ->
                 navigateToDetail(TYPE_SMILE)
             }
         }
@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
         binding.mcvFruit.setOnClickListener {
             navigateToDetail(TYPE_FRUITS)
         }
-        binding.mcvSmile.setOnClickListener {
+        binding.mcvEmoji.setOnClickListener {
             navigateToDetail(TYPE_SMILE)
         }
         binding.mcvAlien.setOnClickListener {
